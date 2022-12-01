@@ -9,7 +9,7 @@ pub const DAY: Day = Day {
     name: "Calorie Counting",
     part_1: run_part1,
     part_2: Some(run_part2),
-    other: &[("Parse", run_parse)],
+    other: &[("Parse", run_parse), ("No Alloc", run_no_alloc)],
 };
 
 fn run_part1(input: &str, b: Bench) -> BenchResult {
@@ -29,6 +29,10 @@ fn run_parse(input: &str, b: Bench) -> BenchResult {
     })
 }
 
+fn run_no_alloc(input: &str, b: Bench) -> BenchResult {
+    b.bench(|| Ok::<_, NoError>(no_alloc_solve(input)))
+}
+
 fn parse(input: &str) -> Result<Vec<Vec<u32>>, std::num::ParseIntError> {
     input
         .trim()
@@ -38,7 +42,7 @@ fn parse(input: &str) -> Result<Vec<Vec<u32>>, std::num::ParseIntError> {
 }
 
 struct Top<T, const N: usize>([T; N]);
-impl<T: Ord + Clone, const N: usize> Top<T, N> {
+impl<T: Ord, const N: usize> Top<T, N> {
     fn add(&mut self, mut value: T) {
         for v in &mut self.0 {
             if &mut value > v {
@@ -54,6 +58,41 @@ fn solve<const N: usize>(elves: &[Vec<u32>]) -> u32 {
         .iter()
         .map(|e| e.iter().sum())
         .for_each(|e| leaders.add(e));
+    leaders.0.into_iter().sum()
+}
+
+fn no_alloc_solve(input: &str) -> u32 {
+    let mut leaders = Top([0; 3]);
+
+    let mut sum = 0;
+    let mut parsed_num = 0;
+    let mut last_was_newline = false;
+    for &byte in input.as_bytes().iter() {
+        if byte == b'\n' {
+            if last_was_newline {
+                // Double newline separates each elf.
+                // We know we finished parsing, so all we have to do is add the sum
+                // to the leaders.
+                leaders.add(sum);
+                sum = 0;
+            } else {
+                // We've reached the end of a number.
+                sum += parsed_num;
+                parsed_num = 0;
+            }
+
+            last_was_newline = true;
+        } else {
+            // We're in the middle of a number, so parse it.
+            last_was_newline = false;
+            parsed_num *= 10;
+            parsed_num += (byte - b'0') as u32;
+        }
+    }
+
+    // There isn't a double newline at the end of the file.
+    leaders.add(sum);
+
     leaders.0.into_iter().sum()
 }
 
@@ -88,6 +127,19 @@ mod day01_tests {
 
         let expected = 45000;
         let actual = solve::<3>(&data);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn part2_no_alloc_test() {
+        let data = aoc_lib::input(DAY.day)
+            .example(Example::Part1, 1)
+            .open()
+            .unwrap();
+
+        let expected = 45000;
+        let actual = no_alloc_solve(&data);
 
         assert_eq!(expected, actual);
     }
