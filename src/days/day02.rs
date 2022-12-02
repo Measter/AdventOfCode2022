@@ -1,4 +1,4 @@
-use aoc_lib::{Bench, BenchResult, Day, NoError, ParseResult, UserError};
+use aoc_lib::{misc::ArrChunks, Bench, BenchResult, Day, NoError, ParseResult, UserError};
 use color_eyre::{eyre::eyre, Report, Result};
 
 pub const DAY: Day = Day {
@@ -9,6 +9,8 @@ pub const DAY: Day = Day {
     other: &[
         ("Parse Part 1", run_parse_part_1),
         ("Parse Part 2", run_parse_part_2),
+        ("Part 1 Fast", run_part1_fast),
+        ("Part 2 Fast", run_part2_fast),
     ],
 };
 
@@ -34,6 +36,14 @@ fn run_parse_part_2(input: &str, b: Bench) -> BenchResult {
         let data = parse_part2(input).map_err(UserError)?;
         Ok::<_, Report>(ParseResult(data))
     })
+}
+
+fn run_part1_fast(input: &str, b: Bench) -> BenchResult {
+    b.bench(|| Ok::<_, NoError>(part1_no_alloc(input)))
+}
+
+fn run_part2_fast(input: &str, b: Bench) -> BenchResult {
+    b.bench(|| Ok::<_, NoError>(part2_no_alloc(input)))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -142,6 +152,60 @@ fn part1(plays: &[Play]) -> u32 {
     plays.iter().map(Play::score).sum()
 }
 
+const ROCK_X: u32 = u32::from_le_bytes(*b"A X\n");
+const ROCK_Y: u32 = u32::from_le_bytes(*b"A Y\n");
+const ROCK_Z: u32 = u32::from_le_bytes(*b"A Z\n");
+const PAPER_X: u32 = u32::from_le_bytes(*b"B X\n");
+const PAPER_Y: u32 = u32::from_le_bytes(*b"B Y\n");
+const PAPER_Z: u32 = u32::from_le_bytes(*b"B Z\n");
+const SCISSORS_X: u32 = u32::from_le_bytes(*b"C X\n");
+const SCISSORS_Y: u32 = u32::from_le_bytes(*b"C Y\n");
+const SCISSORS_Z: u32 = u32::from_le_bytes(*b"C Z\n");
+
+fn part1_no_alloc(input: &str) -> u16 {
+    assert!(input.len() % 4 == 0);
+
+    let mut total_score = 0;
+    for chunk in ArrChunks::new(input.as_bytes()) {
+        let as_u32 = u32::from_ne_bytes(*chunk);
+
+        let match_score = match as_u32 {
+            ROCK_X | PAPER_Y | SCISSORS_Z => 3,
+            ROCK_Y | PAPER_Z | SCISSORS_X => 6,
+            ROCK_Z | PAPER_X | SCISSORS_Y => 0,
+            _ => unreachable!(),
+        };
+
+        let hand_score = (chunk[2] - b'X' + 1) as u16;
+
+        total_score += hand_score + match_score;
+    }
+
+    total_score
+}
+
+fn part2_no_alloc(input: &str) -> u16 {
+    assert!(input.len() % 4 == 0);
+
+    let mut total_score = 0;
+    for chunk in ArrChunks::new(input.as_bytes()) {
+        let as_u32 = u32::from_ne_bytes(*chunk);
+
+        let match_score = ((chunk[2] - b'X') * 3) as u16;
+
+        let hand_score = match as_u32 {
+            ROCK_X | PAPER_Z | SCISSORS_Y => 3,
+            ROCK_Y | PAPER_X | SCISSORS_Z => 1,
+            ROCK_Z | PAPER_Y | SCISSORS_X => 2,
+            _ => unreachable!(),
+        };
+
+        total_score += hand_score + match_score;
+    }
+
+    total_score
+}
+
 #[cfg(test)]
 mod day01_tests {
     use super::*;
@@ -177,5 +241,31 @@ mod day01_tests {
             let actual = hand.score();
             assert_eq!(expected, actual, "{}", idx);
         }
+    }
+
+    #[test]
+    fn part1_fast() {
+        let data = aoc_lib::input(DAY.day)
+            .example(Example::Part1, 1)
+            .open()
+            .unwrap();
+
+        let hand = part1_no_alloc(&data);
+        let expected_scores = 15;
+
+        assert_eq!(expected_scores, hand);
+    }
+
+    #[test]
+    fn part2_fast() {
+        let data = aoc_lib::input(DAY.day)
+            .example(Example::Part1, 1)
+            .open()
+            .unwrap();
+
+        let hand = part2_no_alloc(&data);
+        let expected_scores = 12;
+
+        assert_eq!(expected_scores, hand);
     }
 }
