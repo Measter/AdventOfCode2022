@@ -1,8 +1,3 @@
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
-
 use aoc_lib::{Bench, BenchResult, Day, NoError, ParseResult, UserError};
 use color_eyre::{eyre::eyre, Report, Result};
 
@@ -36,20 +31,17 @@ fn run_parse(input: &str, b: Bench) -> BenchResult {
 
 #[derive(Debug)]
 struct FileSystem<'a> {
-    path_lookup: HashMap<PathBuf, DirectoryID>,
     root: DirectoryID,
     directories: Vec<Directory<'a>>,
 }
 
 impl<'a> FileSystem<'a> {
     fn new() -> Self {
-        let mut paths = HashMap::new();
-        paths.insert(Path::new("/").to_owned(), DirectoryID(0));
         Self {
-            path_lookup: paths,
             root: DirectoryID(0),
             directories: vec![Directory {
                 id: DirectoryID(0),
+                name: "/",
                 parent: None,
                 files: Vec::new(),
                 sub_directories: Vec::new(),
@@ -57,23 +49,16 @@ impl<'a> FileSystem<'a> {
         }
     }
 
-    fn new_directory(
-        &mut self,
-        path: PathBuf,
-        name: &'a str,
-        parent: Option<DirectoryID>,
-    ) -> &mut Directory<'a> {
+    fn new_directory(&mut self, name: &'a str, parent: Option<DirectoryID>) -> &mut Directory<'a> {
         let next_id = DirectoryID(self.directories.len());
         let new_dir = Directory {
             parent,
+            name,
             id: next_id,
             files: Vec::new(),
             sub_directories: Vec::new(),
         };
 
-        if self.path_lookup.insert(path, next_id).is_some() {
-            panic!("Path collision");
-        }
         self.directories.push(new_dir);
         &mut self.directories[next_id.0]
     }
@@ -90,10 +75,6 @@ impl<'a> FileSystem<'a> {
         &mut self.directories[id.0]
     }
 
-    fn get_dir_id(&self, path: &Path) -> Option<DirectoryID> {
-        self.path_lookup.get(path).copied()
-    }
-
     fn root(&self) -> DirectoryID {
         self.root
     }
@@ -105,6 +86,7 @@ struct DirectoryID(usize);
 #[derive(Debug)]
 struct Directory<'a> {
     id: DirectoryID,
+    name: &'a str,
     parent: Option<DirectoryID>,
     files: Vec<(usize, &'a str)>,
     sub_directories: Vec<DirectoryID>,
@@ -127,17 +109,15 @@ impl<'a> Directory<'a> {
     fn add_dir(&mut self, id: DirectoryID) {
         self.sub_directories.push(id);
     }
+
+    fn sub_directories(&self) -> &[DirectoryID] {
+        self.sub_directories.as_ref()
+    }
 }
 
 fn parse(input: &str) -> Result<FileSystem> {
     let mut lines = input.lines().peekable();
     let mut fs = FileSystem::new();
-    let mut path = Path::new("/").to_path_buf();
-
-    if lines.next() != Some("$ cd /") {
-        return Err(eyre!("Expected to start at root"));
-    }
-
     let mut cur_dir_id = fs.root();
 
     while let Some(line) = lines.next() {
@@ -151,9 +131,7 @@ fn parse(input: &str) -> Result<FileSystem> {
                 match kind {
                     "$" => break, // End of LS listing.
                     "dir" => {
-                        let mut full_path = path.clone();
-                        full_path.push(name);
-                        let sub_dir_id = fs.new_directory(full_path, name, Some(cur_dir_id)).id;
+                        let sub_dir_id = fs.new_directory(name, Some(cur_dir_id)).id;
                         let cur_dir = fs.get_mut_dir(cur_dir_id);
                         cur_dir.add_dir(sub_dir_id);
 
@@ -171,8 +149,9 @@ fn parse(input: &str) -> Result<FileSystem> {
                 }
             }
         } else if let Some(dir_name) = line.strip_prefix("$ cd ") {
-            if dir_name == ".." {
-                path.pop();
+            if dir_name == "/" {
+                cur_dir_id = fs.root();
+            } else if dir_name == ".." {
                 let cur_dir = fs.get_dir(cur_dir_id);
                 cur_dir_id = if let Some(cd) = cur_dir.parent {
                     cd
@@ -180,11 +159,16 @@ fn parse(input: &str) -> Result<FileSystem> {
                     return Err(eyre!("Invalid directory travarsal"));
                 };
             } else {
-                path.push(dir_name);
-                cur_dir_id = if let Some(new_id) = fs.get_dir_id(&path) {
+                let cur_dir = fs.get_dir(cur_dir_id);
+                let is_known_dir = cur_dir
+                    .sub_directories()
+                    .iter()
+                    .find(|&&id| fs.get_dir(id).name == dir_name);
+
+                cur_dir_id = if let Some(&new_id) = is_known_dir {
                     new_id
                 } else {
-                    let new_id = fs.new_directory(path.clone(), dir_name, Some(cur_dir_id));
+                    let new_id = fs.new_directory(dir_name, Some(cur_dir_id));
                     new_id.id
                 };
             }
