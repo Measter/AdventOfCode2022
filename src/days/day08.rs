@@ -88,14 +88,17 @@ fn part1(trees: &Grid) -> usize {
 
 fn part2(trees: &Grid) -> usize {
     let mut max_score = 0;
+    assert!(trees.size != 0);
 
-    for (y, row) in trees.trees.chunks_exact(trees.size).enumerate() {
-        for (x, &tree) in row.iter().enumerate() {
+    for y in 1..trees.size - 1 {
+        for x in 1..trees.size - 1 {
+            let tree = *unsafe { trees.trees.get_unchecked(y * trees.size + x) };
+
             // Do the search leftwards.
             let mut left_score = x;
             for new_x in (0..x).rev() {
                 let idx = y * trees.size + new_x;
-                if trees.trees[idx] >= tree {
+                if *unsafe { trees.trees.get_unchecked(idx) } >= tree {
                     left_score = x - new_x;
                     break;
                 }
@@ -105,7 +108,7 @@ fn part2(trees: &Grid) -> usize {
             let mut right_score = trees.size - x - 1;
             for new_x in x + 1..trees.size {
                 let idx = y * trees.size + new_x;
-                if trees.trees[idx] >= tree {
+                if *unsafe { trees.trees.get_unchecked(idx) } >= tree {
                     right_score = new_x - x;
                     break;
                 }
@@ -115,7 +118,7 @@ fn part2(trees: &Grid) -> usize {
             let mut up_score = y;
             for new_y in (0..y).rev() {
                 let idx = new_y * trees.size + x;
-                if trees.trees[idx] >= tree {
+                if *unsafe { trees.trees.get_unchecked(idx) } >= tree {
                     up_score = y - new_y;
                     break;
                 }
@@ -125,7 +128,7 @@ fn part2(trees: &Grid) -> usize {
             let mut down_score = trees.size - y - 1;
             for new_y in y + 1..trees.size {
                 let idx = new_y * trees.size + x;
-                if trees.trees[idx] >= tree {
+                if *unsafe { trees.trees.get_unchecked(idx) } >= tree {
                     down_score = new_y - y;
                     break;
                 }
