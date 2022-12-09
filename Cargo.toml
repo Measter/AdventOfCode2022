@@ -15,3 +15,4 @@ debug = true
 [dependencies]
 aoc_lib = { path = "../aoc_lib" }
 color-eyre = "0.6.2"
+derive_more = "0.99.17"
