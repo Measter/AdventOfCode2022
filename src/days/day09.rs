@@ -122,10 +122,14 @@ fn part1<const N: usize>(moves: &[Move]) -> usize {
     let mut visited = HashSet::new();
     visited.insert(rope.tail());
 
+    let mut last_tail_pos = rope.tail();
     for mov in moves {
         (0..mov.distance).for_each(|_| {
             rope.step(mov.dir);
-            visited.insert(rope.tail());
+            if rope.tail() != last_tail_pos {
+                visited.insert(rope.tail());
+                last_tail_pos = rope.tail();
+            }
         });
     }
 
