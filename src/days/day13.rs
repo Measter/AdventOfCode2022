@@ -186,16 +186,26 @@ fn part2(data: &[PacketPair]) -> usize {
     let divider = parse("[[2]]\n[[6]]").unwrap();
     let PacketPair { left, right } = &divider[0];
 
-    let mut all_packets: Vec<_> = data
+    let mut all_packets: Vec<&PacketContent> = data
         .iter()
-        .flat_map(|pair| [pair.left.clone(), pair.right.clone()])
+        .flat_map(|pair| [&pair.left, &pair.right])
         .collect();
-    all_packets.push(left.clone());
-    all_packets.push(right.clone());
+    all_packets.push(left);
+    all_packets.push(right);
     all_packets.sort();
 
-    let left_pos = all_packets.iter().position(|p| p == left).unwrap() + 1;
-    let right_pos = all_packets.iter().position(|p| p == right).unwrap() + 1;
+    let (left_pos, right_pos) = all_packets.iter().enumerate().fold(
+        (usize::MAX, usize::MAX),
+        |(left_pos, right_pos), (idx, &packet)| {
+            if left_pos == usize::MAX && packet == left {
+                (idx + 1, right_pos)
+            } else if right_pos == usize::MAX && packet == right {
+                (left_pos, idx + 1)
+            } else {
+                (left_pos, right_pos)
+            }
+        },
+    );
 
     left_pos * right_pos
 }
