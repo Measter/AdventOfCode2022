@@ -14,6 +14,7 @@ mod day11;
 mod day12;
 mod day13;
 mod day14;
+mod day15;
 
 pub static DAYS: &[Day] = &[
     day01::DAY,
@@ -30,4 +31,5 @@ pub static DAYS: &[Day] = &[
     day12::DAY,
     day13::DAY,
     day14::DAY,
+    day15::DAY,
 ];
