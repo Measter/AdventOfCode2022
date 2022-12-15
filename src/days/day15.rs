@@ -94,18 +94,28 @@ fn get_x_range(sensor: &Sensor, row: i32) -> Option<RangeInclusive<i32>> {
 }
 
 fn part1<const ROW: i32>(sensors: &[Sensor], beacons: &[Point]) -> usize {
-    let mut covered = HashSet::new();
+    let mut ranges = Vec::new();
 
     for sensor in sensors {
         let Some(x_range) = get_x_range(sensor, ROW) else { continue };
-        covered.extend(x_range);
+        ranges.push(x_range);
     }
 
-    beacons.iter().filter(|b| b.y == ROW).for_each(|b| {
-        covered.remove(&b.x);
-    });
+    merge_ranges(&mut ranges, &mut Vec::new());
+    let mut count = 0;
 
-    covered.len()
+    let row_beacons: Vec<Point> = beacons.iter().filter(|b| b.y == ROW).copied().collect();
+
+    for range in ranges {
+        for x in range {
+            if row_beacons.iter().any(|b| b.x == x) {
+                continue;
+            }
+            count += 1;
+        }
+    }
+
+    count
 }
 
 fn merge_ranges(ranges: &mut Vec<RangeInclusive<i32>>, scratch: &mut Vec<RangeInclusive<i32>>) {
