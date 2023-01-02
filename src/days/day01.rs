@@ -1,4 +1,4 @@
-use aoc_lib::{Bench, BenchResult, Day, NoError, ParseResult, UserError};
+use aoc_lib::{misc::Top, Bench, BenchResult, Day, NoError, ParseResult, UserError};
 use color_eyre::{Report, Result};
 
 // 11:43
@@ -41,23 +41,12 @@ fn parse(input: &str) -> Result<Vec<Vec<u32>>, std::num::ParseIntError> {
         .collect()
 }
 
-struct Top<T, const N: usize>([T; N]);
-impl<T: Ord, const N: usize> Top<T, N> {
-    fn add(&mut self, mut value: T) {
-        for v in &mut self.0 {
-            if &mut value > v {
-                std::mem::swap(v, &mut value);
-            }
-        }
-    }
-}
-
 fn solve<const N: usize>(elves: &[Vec<u32>]) -> u32 {
     let mut leaders = Top([0; N]);
     elves
         .iter()
         .map(|e| e.iter().sum())
-        .for_each(|e| leaders.add(e));
+        .for_each(|e| leaders.push(e));
     leaders.0.into_iter().sum()
 }
 
@@ -73,7 +62,7 @@ fn no_alloc_solve(input: &str) -> u32 {
                 // Double newline separates each elf.
                 // We know we finished parsing, so all we have to do is add the sum
                 // to the leaders.
-                leaders.add(sum);
+                leaders.push(sum);
                 sum = 0;
             } else {
                 // We've reached the end of a number.
@@ -91,7 +80,7 @@ fn no_alloc_solve(input: &str) -> u32 {
     }
 
     // There isn't a double newline at the end of the file.
-    leaders.add(sum);
+    leaders.push(sum);
 
     leaders.0.into_iter().sum()
 }

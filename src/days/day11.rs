@@ -1,4 +1,4 @@
-use aoc_lib::{Bench, BenchResult, Day, NoError, ParseResult, UserError};
+use aoc_lib::{misc::Top, Bench, BenchResult, Day, NoError, ParseResult, UserError};
 use color_eyre::{eyre::eyre, Report, Result};
 
 // 11:48
@@ -134,17 +134,6 @@ fn parse(input: &str) -> Result<Vec<Monkey>> {
     Ok(monkeys)
 }
 
-struct Top<T, const N: usize>([T; N]);
-impl<T: Ord, const N: usize> Top<T, N> {
-    fn add(&mut self, mut value: T) {
-        for v in &mut self.0 {
-            if &mut value > v {
-                std::mem::swap(v, &mut value);
-            }
-        }
-    }
-}
-
 fn solve<const PART2: bool>(mut monkeys: Vec<Monkey>) -> usize {
     let mut inspect_counts = vec![0; monkeys.len()];
 
@@ -179,7 +168,7 @@ fn solve<const PART2: bool>(mut monkeys: Vec<Monkey>) -> usize {
     }
 
     let mut top2 = Top([0; 2]);
-    inspect_counts.into_iter().for_each(|c| top2.add(c));
+    inspect_counts.into_iter().for_each(|c| top2.push(c));
 
     let [a, b] = top2.0;
     a * b
