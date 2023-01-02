@@ -50,34 +50,26 @@ impl PartialEq for PacketContent {
     }
 }
 
+fn cmp_list(left: &[PacketContent], right: &[PacketContent]) -> std::cmp::Ordering {
+    left.iter()
+        .zip(right)
+        .map(|(l, r)| l.cmp(r))
+        .fold(Ordering::Equal, Ordering::then)
+        .then(left.len().cmp(&right.len()))
+}
+
 impl Ord for PacketContent {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         use PacketContent::*;
         match (self, other) {
             (Integer(left), Integer(right)) => left.cmp(right),
-
-            (List(left), List(right)) => left
-                .iter()
-                .zip(right)
-                .map(|(l, r)| l.cmp(r))
-                .fold(Ordering::Equal, Ordering::then)
-                .then(left.len().cmp(&right.len())),
+            (List(left), List(right)) => cmp_list(left, right),
 
             (Integer(_), List(right)) if right.is_empty() => Ordering::Greater,
-            (Integer(_), List(right)) => [self]
-                .into_iter()
-                .zip(right)
-                .map(|(l, r)| l.cmp(r))
-                .fold(Ordering::Equal, Ordering::then)
-                .then(1.cmp(&right.len())),
+            (Integer(val), List(right)) => cmp_list(&[PacketContent::Integer(*val)], right),
 
             (List(list), Integer(_)) if list.is_empty() => Ordering::Less,
-            (List(left), Integer(_)) => left
-                .iter()
-                .zip([other])
-                .map(|(l, r)| l.cmp(r))
-                .fold(Ordering::Equal, Ordering::then)
-                .then(left.len().cmp(&1)),
+            (List(left), Integer(val)) => cmp_list(left, &[PacketContent::Integer(*val)]),
         }
     }
 }
