@@ -29,89 +29,115 @@ fn run_parse(input: &str, b: Bench) -> BenchResult {
     })
 }
 
+#[derive(Debug, Clone, Copy, Hash)]
+struct EntryId(usize);
+
+#[derive(Debug)]
+enum FileSystemEntryKind {
+    File { size: usize },
+    Directory { children: Vec<EntryId> },
+}
+
+impl FileSystemEntryKind {
+    fn file(size: usize) -> Self {
+        FileSystemEntryKind::File { size }
+    }
+
+    fn dir() -> Self {
+        FileSystemEntryKind::Directory {
+            children: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct FileSystemEntry<'a> {
+    id: EntryId,
+    name: &'a str,
+    parent: Option<EntryId>,
+    kind: FileSystemEntryKind,
+}
+
+impl<'a> FileSystemEntry<'a> {
+    fn size(&self, fs: &FileSystem) -> usize {
+        match &self.kind {
+            FileSystemEntryKind::File { size } => *size,
+            FileSystemEntryKind::Directory { children } => {
+                children.iter().map(|&ch| fs.get_entry(ch).size(fs)).sum()
+            }
+        }
+    }
+
+    fn is_file(&self) -> bool {
+        matches!(&self.kind, FileSystemEntryKind::File { .. })
+    }
+
+    fn is_directory(&self) -> bool {
+        matches!(&self.kind, FileSystemEntryKind::Directory { .. })
+    }
+}
+
 #[derive(Debug)]
 struct FileSystem<'a> {
-    root: DirectoryID,
-    directories: Vec<Directory<'a>>,
+    root: EntryId,
+    entries: Vec<FileSystemEntry<'a>>,
 }
 
 impl<'a> FileSystem<'a> {
     fn new() -> Self {
         Self {
-            root: DirectoryID(0),
-            directories: vec![Directory {
-                id: DirectoryID(0),
+            root: EntryId(0),
+            entries: vec![FileSystemEntry {
+                id: EntryId(0),
                 name: "/",
                 parent: None,
-                files: Vec::new(),
-                sub_directories: Vec::new(),
+                kind: FileSystemEntryKind::Directory {
+                    children: Vec::new(),
+                },
             }],
         }
     }
 
-    fn new_directory(&mut self, name: &'a str, parent: Option<DirectoryID>) -> &mut Directory<'a> {
-        let next_id = DirectoryID(self.directories.len());
-        let new_dir = Directory {
-            parent,
+    fn new_entry(
+        &mut self,
+        name: &'a str,
+        parent: EntryId,
+        kind: FileSystemEntryKind,
+    ) -> &mut FileSystemEntry<'a> {
+        let next_id = EntryId(self.entries.len());
+        match &mut self.entries[parent.0].kind {
+            FileSystemEntryKind::File { .. } => panic!("tried to add child to file"),
+            FileSystemEntryKind::Directory { children } => children.push(next_id),
+        }
+
+        let new_dir = FileSystemEntry {
+            parent: Some(parent),
             name,
             id: next_id,
-            files: Vec::new(),
-            sub_directories: Vec::new(),
+            kind,
         };
 
-        self.directories.push(new_dir);
-        &mut self.directories[next_id.0]
+        self.entries.push(new_dir);
+        &mut self.entries[next_id.0]
     }
 
-    fn directories(&self) -> impl Iterator<Item = &Directory<'a>> {
-        self.directories.iter()
+    fn get_children(&self, entry: EntryId) -> &[EntryId] {
+        match &self.entries[entry.0].kind {
+            FileSystemEntryKind::File { .. } => &[],
+            FileSystemEntryKind::Directory { children } => children,
+        }
     }
 
-    fn get_dir(&self, id: DirectoryID) -> &Directory<'a> {
-        &self.directories[id.0]
+    fn entries(&self) -> impl Iterator<Item = &FileSystemEntry<'a>> {
+        self.entries.iter()
     }
 
-    fn get_mut_dir(&mut self, id: DirectoryID) -> &mut Directory<'a> {
-        &mut self.directories[id.0]
+    fn get_entry(&self, id: EntryId) -> &FileSystemEntry<'a> {
+        &self.entries[id.0]
     }
 
-    fn root(&self) -> DirectoryID {
+    fn root(&self) -> EntryId {
         self.root
-    }
-}
-
-#[derive(Debug, Clone, Copy, Hash)]
-struct DirectoryID(usize);
-
-#[derive(Debug)]
-struct Directory<'a> {
-    id: DirectoryID,
-    name: &'a str,
-    parent: Option<DirectoryID>,
-    files: Vec<(usize, &'a str)>,
-    sub_directories: Vec<DirectoryID>,
-}
-
-impl<'a> Directory<'a> {
-    fn size(&self, fs: &FileSystem) -> usize {
-        self.files.iter().map(|(s, _)| s).sum::<usize>()
-            + self
-                .sub_directories
-                .iter()
-                .map(|sd| fs.get_dir(*sd).size(fs))
-                .sum::<usize>()
-    }
-
-    fn add_file(&mut self, name: &'a str, size: usize) {
-        self.files.push((size, name));
-    }
-
-    fn add_dir(&mut self, id: DirectoryID) {
-        self.sub_directories.push(id);
-    }
-
-    fn sub_directories(&self) -> &[DirectoryID] {
-        self.sub_directories.as_ref()
     }
 }
 
@@ -128,48 +154,54 @@ fn parse(input: &str) -> Result<FileSystem> {
                     return Err(eyre!("Unexpected input: {:?}", next));
                 };
 
-                match kind {
+                let entry_kind = match kind {
                     "$" => break, // End of LS listing.
-                    "dir" => {
-                        let sub_dir_id = fs.new_directory(name, Some(cur_dir_id)).id;
-                        let cur_dir = fs.get_mut_dir(cur_dir_id);
-                        cur_dir.add_dir(sub_dir_id);
-
-                        lines.next();
-                    }
+                    "dir" => FileSystemEntryKind::dir(),
                     _ if kind.bytes().all(|b| b.is_ascii_digit()) => {
-                        let cur_dir = fs.get_mut_dir(cur_dir_id);
-                        cur_dir.add_file(name, kind.parse().unwrap());
+                        let exists = fs
+                            .get_children(cur_dir_id)
+                            .iter()
+                            .map(|&id| fs.get_entry(id))
+                            .filter(|entry| entry.is_file())
+                            .any(|entry| entry.name == name);
+                        if exists {
+                            lines.next();
+                            continue;
+                        }
 
-                        lines.next();
+                        FileSystemEntryKind::file(kind.parse().unwrap())
                     }
                     _ => {
                         return Err(eyre!("Unexpected input: {:?}", line));
                     }
-                }
+                };
+
+                fs.new_entry(name, cur_dir_id, entry_kind);
+                lines.next();
             }
         } else if let Some(dir_name) = line.strip_prefix("$ cd ") {
             if dir_name == "/" {
                 cur_dir_id = fs.root();
             } else if dir_name == ".." {
-                let cur_dir = fs.get_dir(cur_dir_id);
+                let cur_dir = fs.get_entry(cur_dir_id);
                 cur_dir_id = if let Some(cd) = cur_dir.parent {
                     cd
                 } else {
                     return Err(eyre!("Invalid directory travarsal"));
                 };
             } else {
-                let cur_dir = fs.get_dir(cur_dir_id);
-                let is_known_dir = cur_dir
-                    .sub_directories()
+                let is_known_dir = fs
+                    .get_children(cur_dir_id)
                     .iter()
-                    .find(|&&id| fs.get_dir(id).name == dir_name);
+                    .map(|&ci| fs.get_entry(ci))
+                    .filter(|ci| ci.is_directory())
+                    .find(|ci| ci.name == dir_name);
 
-                cur_dir_id = if let Some(&new_id) = is_known_dir {
-                    new_id
-                } else {
-                    let new_id = fs.new_directory(dir_name, Some(cur_dir_id));
+                cur_dir_id = if let Some(new_id) = is_known_dir {
                     new_id.id
+                } else {
+                    fs.new_entry(dir_name, cur_dir_id, FileSystemEntryKind::dir())
+                        .id
                 };
             }
         } else {
@@ -181,7 +213,8 @@ fn parse(input: &str) -> Result<FileSystem> {
 }
 
 fn part1(fs: &FileSystem) -> usize {
-    fs.directories()
+    fs.entries()
+        .filter(|e| e.is_directory())
         .map(|d| d.size(fs))
         .filter(|&d| d <= 100000)
         .sum()
@@ -191,12 +224,13 @@ fn part2(fs: &FileSystem) -> usize {
     const TOTAL_FS_SIZE: usize = 70_000_000;
     const NEEDED_SPACE: usize = 30_000_000;
 
-    let used_space = fs.get_dir(fs.root()).size(fs);
+    let used_space = fs.get_entry(fs.root()).size(fs);
     let free_space = TOTAL_FS_SIZE - used_space;
 
     let space_to_free = NEEDED_SPACE - free_space;
 
-    fs.directories()
+    fs.entries()
+        .filter(|e| e.is_directory())
         .map(|d| d.size(fs))
         .filter(|&s| s >= space_to_free)
         .min()
