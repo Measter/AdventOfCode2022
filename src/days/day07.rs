@@ -128,6 +128,17 @@ impl<'a> FileSystem<'a> {
         }
     }
 
+    fn has_child_with_name(&self, entry: EntryId, name: &str) -> bool {
+        match &self.entries[entry.0].kind {
+            FileSystemEntryKind::File { .. } => false,
+            FileSystemEntryKind::Directory { children } => children
+                .iter()
+                .map(|&id| self.get_entry(id))
+                .filter(|entry| entry.is_file())
+                .any(|entry| entry.name == name),
+        }
+    }
+
     fn entries(&self) -> impl Iterator<Item = &FileSystemEntry<'a>> {
         self.entries.iter()
     }
@@ -156,15 +167,15 @@ fn parse(input: &str) -> Result<FileSystem> {
 
                 let entry_kind = match kind {
                     "$" => break, // End of LS listing.
-                    "dir" => FileSystemEntryKind::dir(),
+                    "dir" => {
+                        if fs.has_child_with_name(cur_dir_id, name) {
+                            lines.next();
+                            continue;
+                        }
+                        FileSystemEntryKind::dir()
+                    }
                     _ if kind.bytes().all(|b| b.is_ascii_digit()) => {
-                        let exists = fs
-                            .get_children(cur_dir_id)
-                            .iter()
-                            .map(|&id| fs.get_entry(id))
-                            .filter(|entry| entry.is_file())
-                            .any(|entry| entry.name == name);
-                        if exists {
+                        if fs.has_child_with_name(cur_dir_id, name) {
                             lines.next();
                             continue;
                         }
