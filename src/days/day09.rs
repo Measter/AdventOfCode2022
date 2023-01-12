@@ -84,8 +84,8 @@ impl<const N: usize> Rope<N> {
 
             if distance.x.abs() > 1 || distance.y.abs() > 1 {
                 let new_move = Position {
-                    x: distance.x.min(1).max(-1),
-                    y: distance.y.min(1).max(-1),
+                    x: distance.x.clamp(-1, 1),
+                    y: distance.y.clamp(-1, 1),
                 };
                 *tail = *tail + new_move;
             }
