@@ -59,15 +59,6 @@ struct FileSystemEntry<'a> {
 }
 
 impl<'a> FileSystemEntry<'a> {
-    fn size(&self, fs: &FileSystem) -> usize {
-        match &self.kind {
-            FileSystemEntryKind::File { size } => *size,
-            FileSystemEntryKind::Directory { children } => {
-                children.iter().map(|&ch| fs.get_entry(ch).size(fs)).sum()
-            }
-        }
-    }
-
     fn is_file(&self) -> bool {
         matches!(&self.kind, FileSystemEntryKind::File { .. })
     }
@@ -136,6 +127,15 @@ impl<'a> FileSystem<'a> {
                 .map(|&id| self.get_entry(id))
                 .filter(|entry| entry.is_file())
                 .any(|entry| entry.name == name),
+        }
+    }
+
+    fn size_of_entry(&self, entry: EntryId) -> usize {
+        match &self.entries[entry.0].kind {
+            FileSystemEntryKind::File { size } => *size,
+            FileSystemEntryKind::Directory { children } => {
+                children.iter().map(|c| self.size_of_entry(*c)).sum()
+            }
         }
     }
 
@@ -226,7 +226,7 @@ fn parse(input: &str) -> Result<FileSystem> {
 fn part1(fs: &FileSystem) -> usize {
     fs.entries()
         .filter(|e| e.is_directory())
-        .map(|d| d.size(fs))
+        .map(|d| fs.size_of_entry(d.id))
         .filter(|&d| d <= 100000)
         .sum()
 }
@@ -235,14 +235,14 @@ fn part2(fs: &FileSystem) -> usize {
     const TOTAL_FS_SIZE: usize = 70_000_000;
     const NEEDED_SPACE: usize = 30_000_000;
 
-    let used_space = fs.get_entry(fs.root()).size(fs);
+    let used_space = fs.size_of_entry(fs.root());
     let free_space = TOTAL_FS_SIZE - used_space;
 
     let space_to_free = NEEDED_SPACE - free_space;
 
     fs.entries()
         .filter(|e| e.is_directory())
-        .map(|d| d.size(fs))
+        .map(|d| fs.size_of_entry(d.id))
         .filter(|&s| s >= space_to_free)
         .min()
         .unwrap()
